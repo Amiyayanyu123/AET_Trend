@@ -1,0 +1,93 @@
+#################################site linear regression
+library(nlme)
+library(ape)
+library(MuMIn)
+library(extrafont)
+library(tidyverse)
+library(lubridate)
+
+setwd("F:\\Fluxnet\\YY")
+
+filenames <- list.files(pattern="*.csv", full.names=TRUE)
+
+ldf <- lapply(filenames, read_csv,na = "-9999") 
+
+names(ldf) <- filenames
+
+names = c("TIMESTAMP","NEE_VUT_REF","CO2_F_MDS","P_F",
+          "LE_F_MDS","VPD_F_MDS","TA_F_MDS","SWC_F_MDS_1","GPP_DT_VUT_MEAN")
+
+variables_number = lapply(sapply(ldf, colnames), function(x) x %in% names) #check sites containing 9 variable numbers 
+count_number = lapply(variables_number,sum,na.rm = TRUE)
+filenames_contain_all = Filter(function(x) x == 9, count_number)
+filenames_select <- names(filenames_contain_all)
+ldf_final <- ldf[names(ldf) %in% filenames_select  ==  TRUE] 
+
+##################################
+year_number = lapply(sapply(ldf_final, rownames), function(x) length(x))
+filenames_filter_year = Filter(function(x) x > 8, year_number) #check sites containing years over 6 
+filenames_select_year <- names(filenames_filter_year)
+extract_final <- ldf_final[names(ldf_final) %in% filenames_select_year  ==  TRUE] #
+
+data = extract_final$`./FLX_US-Ne2_FLUXNET2015_FULLSET_YY_2001-2013_1-4.csv`
+trend = function(data) {
+  
+  count_years = nrow(data)
+  
+  data = data %>% dplyr::select(TIMESTAMP,NEE_VUT_REF, CO2_F_MDS,P_F, #select variables
+                         LE_F_MDS,VPD_F_MDS,TA_F_MDS,SWC_F_MDS_1,GPP_DT_VUT_MEAN) %>%
+    rename(Year = TIMESTAMP,nee = NEE_VUT_REF, CO2 = CO2_F_MDS, 
+    LE = LE_F_MDS,VPD = VPD_F_MDS,Temp = TA_F_MDS,swc = SWC_F_MDS_1,Pre = P_F,gpp = GPP_DT_VUT_MEAN) 
+  
+  variables_trend = data %>%
+    dplyr::select(nee,CO2,LE,VPD,Temp,Pre,gpp,Year) %>% 
+    rename(V_nee = nee, V_CO2 =CO2,
+           V_LE = LE,V_VPD = VPD,V_Temp = Temp,V_Pre = Pre,V_gpp = gpp) %>%
+    summarise_at(vars(matches("V")), ~lm(scale(.) ~ scale(Year), na.action=na.exclude)$coefficients[2])
+  
+  
+  final_result = cbind(variables_trend,count_years)
+  return(final_result)
+}
+
+
+trend_data = lapply(extract_final, trend)
+
+all_trend_data = do.call(rbind.data.frame,trend_data)
+
+
+###############################################################
+library(ridge)
+
+data = extract_final$`./FLX_US-Ne2_FLUXNET2015_FULLSET_YY_2001-2013_1-4.csv`
+  
+trend = function(data) {
+  
+  count_years = nrow(data)
+  
+  data = data %>% dplyr::select(TIMESTAMP,NEE_VUT_REF, CO2_F_MDS,P_F, #select variables
+                                LE_F_MDS,VPD_F_MDS,TA_F_MDS,SWC_F_MDS_1,GPP_DT_VUT_MEAN) %>%
+    rename(Year = TIMESTAMP,nee = NEE_VUT_REF, CO2 = CO2_F_MDS, 
+           LE = LE_F_MDS,VPD = VPD_F_MDS,Temp = TA_F_MDS,swc = SWC_F_MDS_1,Pre = P_F,gpp = GPP_DT_VUT_MEAN) 
+  
+  
+  ridge_regression <- linearRidge(nee ~ Pre + Temp + VPD + CO2, data = data,nPCs = 2)
+    
+     
+  
+  
+  final_result = cbind(variables_trend,count_years)
+  return(final_result)
+}
+
+
+
+
+
+
+
+
+
+
+
+
