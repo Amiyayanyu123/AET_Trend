@@ -1,0 +1,767 @@
+####################################################
+Calc_Emp_Prob <- function(D) {
+  # Length of data
+  n = length(D)
+  # Pre-assign probability array
+  P = zeros(n,1)
+  
+  # Loop through the data
+  for (i in 1:n) {
+    P[i,1] = sum( D <= D[i] )
+  }
+  
+  # Gringorten plotting position
+  Y = (P - 0.44) / (n + 0.12)
+  
+}
+
+# fit univariate cdf, select from 13 cdf candidate (no error)
+fitalldist <- function(data,X1=100) {
+  
+  require(fitdistrplus)
+  require(extRemes)
+  require(ismev)
+  require(SCI) 
+  require(goft)
+  require(gPdtest)
+  require(actuar)
+  require(evd)
+  
+  # change the same data value slightly
+  
+  # dup_data <- duplicated(data)
+  # for (i in 1:length(dup_data)) {
+  #   if (dup_data[i] == 0) {
+  #     data[data=dup_data[i]] = data[data=dup_data[i]] + runif(data[data=dup_data[i]],0,0.001)
+  #   } else {
+  #     data[data=dup_data[i]] = data[data=dup_data[i]] + runif(data[data=dup_data[i]],-0.001,0.001)
+  #   }
+  # }
+  
+  # calculate empirical CDF
+  emp <- Calc_Emp_Prob(data)
+  
+  # total 13 distributions
+  distnames <- c("gamma","exponential","weibull","normal","logistic",
+                 "log-normal","log-logistic","cauchy",
+                 "generalized extreme value","generalized pareto",
+                 "inverse gaussian")
+  
+  results <- data.frame('aic' = numeric(), 'aicc' = numeric(), 
+                        'bic' = numeric(), 'p' = numeric())
+  
+  ep_mat <- matrix( NA, length(data), 11 )
+  pdf_mat <- matrix(NA, length(data), 11 )
+  V1_mat <- matrix(NA, length(X1), 11 )
+  
+  para_list <- list()
+  
+  loop_id <- 1
+  # distribution not for negative values
+  for (i in c("gamma","exp","weibull","norm","logis","lnorm","llogis","cauchy")) {
+    if (any(data<0)) {
+      if (i %in% c("gamma","exp","weibull","lnorm","llogis")) {
+        results[loop_id,] <- c(NA,NA,NA,NA)
+        loop_id <- loop_id + 1
+        next
+      } 
+    }
+    
+    possibleError <- tryCatch({fit <- fitdist(data,i)},error = function(e) e)
+    if (!inherits(possibleError, "error")) {
+      fit <- fitdist(data,i)
+      para <- c(as.list(fit$estimate), as.list(fit$fix.arg))
+      para_list[[loop_id]] = para
+      name <- fit$distname
+      pdistname <- paste("p", name, sep = "")
+      ddistname <- paste("d", name, sep = "")
+      # invcdf1name <- paste("q",name,sep = "")
+      
+      ep <- do.call(pdistname, c(list(data), as.list(para)))
+      pdf <- do.call(ddistname, c(list(data), as.list(para)))
+      V1 <- do.call(pdistname, c(list(X1), as.list(para)))
+      # V2 <- do.call(invcdf1name, c(list(X2), as.list(para)))
+      
+      ep_mat[,loop_id] <- ep
+      pdf_mat[,loop_id] <- pdf
+      V1_mat[,loop_id]<-V1
+      
+      aic <- fit$aic
+      aicc <- aic + 2*length(para)*(length(para)+1)/(fit$n-length(para)-1)
+      bic <- fit$bic
+      p <- ks.test(emp,ep)$p
+      
+      results[loop_id,] <- c(aic,aicc,bic,p)
+      loop_id <- loop_id + 1
+    } else {
+      results[loop_id,] <- c(NA,NA,NA,NA)
+      loop_id <- loop_id + 1
+    }
+  }
+  
+  # function to calcuate good-of-fitness 
+  calc_gof <- function(ep, emp, loop_id, results, parlen, name) {
+    res <- ep - emp
+    # sample size
+    k <- length(ep)
+    # number of parameter
+    m <- parlen
+    aic <- k * log(sum(res^2)/k) + 2*m
+    aicc <- aic + 2*m*(m+1)/(k-m-1)
+    bic <- k * log(sum(res^2)/k) + m * log(k)
+    p <- suppressWarnings(ks.test(emp,ep)$p)
+    results[loop_id,] <<- c(aic, aicc, bic, p)
+    
+    loop_id <<- loop_id + 1
+  }
+  
+  # gumbel
+  
+  # possibleError <- tryCatch({fitgumb <- dist.start(data,"gumbel")},error = function(e) e)
+  # if (!inherits(possibleError, "error")) {
+  #   fitgumb <- dist.start(data,"gumbel")
+  #   ep <- actuar::pgumbel(data, alpha = fitgumb$loc, scale = fitgumb$scale)
+  #   V1 <- actuar::pgumbel(X1, alpha = fitgumb$loc, scale = fitgumb$scale)
+  #   pdf <- actuar::dgumbel(data, alpha = fitgumb$loc, scale = fitgumb$scale)
+  #   para_list[[loop_id]] = list( alpha = fitgumb$loc, scale = fitgumb$scale )
+  #   ep_mat[,loop_id] <- ep
+  #   pdf_mat[,loop_id] <- pdf
+  #   V1_mat[,loop_id]<-V1
+  #   
+  #   name <- "gumbel"
+  #   calc_gof(ep, emp, loop_id, results, 2, name)
+  # } else {
+  #   results[loop_id,] <- c(NA,NA,NA,NA)
+  #   loop_id <- loop_id + 1
+  # }
+  
+  # generalized extreme value
+  possibleError <- tryCatch({fitgev <- extRemes::fevd(data, threshold = min(data)-1, type = 'GEV',method = 'Lmoments')},
+                            error = function(e) e)
+  if (!inherits(possibleError, "error")) {
+    fitgev <- extRemes::fevd(data, threshold = min(data)-1, type = 'GEV',method = 'Lmoments')
+    gevpar <- fitgev$results
+    ep <- evd::pgev(data, shape = as.numeric(gevpar[3]), loc =as.numeric(gevpar[1]), scale = as.numeric(gevpar[2]))
+    pdf <- evd::dgev(data, shape = as.numeric(gevpar[3]), loc =as.numeric(gevpar[1]), scale = as.numeric(gevpar[2]))
+    V1<-evd::pgev(X1, shape = as.numeric(gevpar[3]), loc =as.numeric(gevpar[1]), scale = as.numeric(gevpar[2]))
+    para_list[[loop_id]] = list(shape = as.numeric(gevpar[3]), loc =as.numeric(gevpar[1]), scale = as.numeric(gevpar[2]))
+    ep_mat[,loop_id] <- ep
+    pdf_mat[,loop_id] <- pdf
+    V1_mat[,loop_id]<-V1
+    name <- "gev"
+    calc_gof(ep, emp, loop_id, results, 3, name)
+  } else {
+    results[loop_id,] <- c(NA,NA,NA,NA)
+    loop_id <- loop_id + 1
+  }
+  
+  ## generalized pareto, use min(data) as the threshold of gpd
+  possibleError <- tryCatch({fitgpd <- extRemes::fevd(data, threshold = min(data)-1, type = 'GP',method = 'Lmoments')},
+                            error = function(e) e)
+  if (!inherits(possibleError, "error")) {
+    fitgpd <- extRemes::fevd(data, threshold = min(data)-1, type = 'GP',method = 'Lmoments')
+    gpdpar <- fitgpd$results
+    ep <- evd::pgpd(data, loc = min(data)-1, scale = as.numeric(gpdpar[1]), shape = as.numeric(gpdpar[2]))
+    pdf <- evd::dgpd(data, loc = min(data)-1, scale = as.numeric(gpdpar[1]), shape = as.numeric(gpdpar[2]))
+    V1 <- evd::pgpd(X1, loc = min(data)-1, scale = as.numeric(gpdpar[1]), shape = as.numeric(gpdpar[2]))
+    para_list[[loop_id]] = list(loc = min(data)-1, scale = as.numeric(gpdpar[1]), shape = as.numeric(gpdpar[2]))
+    ep_mat[,loop_id] <- ep
+    pdf_mat[,loop_id] <- pdf
+    V1_mat[,loop_id]<-V1
+    
+    name <- "gpd"
+    calc_gof(ep, emp, loop_id, results, 3, name)
+  } else {
+    results[loop_id,] <- c(NA,NA,NA,NA)
+    loop_id <- loop_id + 1
+  }
+  
+  # Three-parameter Gamma (Pearson Type III)
+  # possibleError <- tryCatch({fitpe3 <- dist.start(data,"pe3")},error = function(e) e)
+  # if (!inherits(possibleError, "error")) {
+  #   fitpe3 <- dist.start(data,"pe3")
+  #   ep <- SCI::ppe3(data, shape=fitpe3$shape, scale=fitpe3$scale, location=fitpe3$location)
+  #   pdf <- SCI::dpe3(data, shape=fitpe3$shape, scale=fitpe3$scale, location=fitpe3$location)
+  #   V1<-SCI::ppe3(X1, shape=fitpe3$shape, scale=fitpe3$scale, location=fitpe3$location)
+  #   para_list[[loop_id]] = list(shape=fitpe3$shape, scale=fitpe3$scale, location=fitpe3$location)
+  #   ep_mat[,loop_id] <- ep
+  #   pdf_mat[,loop_id] <- pdf
+  #   V1_mat[,loop_id]<-V1
+  #   
+  #   name <- "pe3"
+  #   calc_gof(ep, emp, loop_id, results, 3, name)
+  # } else {
+  #   results[loop_id,] <- c(NA,NA,NA,NA)
+  #   loop_id <- loop_id + 1
+  # }
+  
+  # inverse gaussian
+  possibleError <- tryCatch({fitig <- goft::ig_fit(data)},error = function(e) e)
+  if (!inherits(possibleError, "error")) {
+    fitig <- goft::ig_fit(data)
+    ep <- actuar::pinvgauss(data, mean = fitig[1,1],shape = fitig[2,1])
+    pdf <- actuar::dinvgauss(data, mean = fitig[1,1],shape = fitig[2,1])
+    V1 <- actuar::pinvgauss(X1, mean = fitig[1,1],shape = fitig[2,1])
+    para_list[[loop_id]] = list( mean = fitig[1,1],shape = fitig[2,1] )
+    ep_mat[,loop_id] <- ep
+    pdf_mat[,loop_id] <- pdf
+    V1_mat[,loop_id]<-V1
+    
+    name <- "invgauss"
+    calc_gof(ep, emp, loop_id, results, 2, name)
+  } else {
+    results[loop_id,] <- c(NA,NA,NA,NA)
+    loop_id <- loop_id + 1
+  }
+  
+  results['family'] = c("gamma","exp","weibull","norm","logis","lnorm","llogis",
+                        "cauchy","gev","gpd","invgauss")
+  
+  # reorder results according to p-value and AIC
+  results2 <- results[!is.na(results$p),]
+  results2 <- results2[order(rank(results2$p), -rank(results2$aic), decreasing = T), ]
+  rownames(results2) <- NULL
+  
+  # output
+  PD_name <- results2[results2$p>0.1,"family"][1]
+  if (is.na(PD_name)) {
+    warning('The fitting of univariate distribution is not significant !')
+    PD_name <- results2[1,'family']
+  }
+  PD_id <- which( results$family == PD_name )
+  ep <- ep_mat[,PD_id]
+  pdf <- pdf_mat[,PD_id]
+  V1 <- V1_mat[,PD_id]
+  
+  para <- para_list[[PD_id]]
+  
+  # check whether any NaN in ep and pdf
+  loop_id = 1
+  while( any(is.na(ep)) | any(is.na(pdf)) | any(is.na(V1)) ) {
+    PD_name <- results2[results2$p>0.1,"family"][loop_id + 1]
+    PD_id <- which( results$family == PD_name )
+    ep <- ep_mat[,PD_id]
+    pdf <- pdf_mat[,PD_id]
+    V1 <- V1_mat[,PD_id]
+  }
+  para <- para_list[[PD_id]]
+  
+  # parameteric bootstrap for uncertainty
+  if (PD_name %in% c("gamma","exp","weibull","norm","logis","lnorm","llogis","cauchy")) {
+    f1 <- fitdist(data,PD_name)
+    bnor <- bootdist(f1)
+    resboot <- bnor$estim
+  }  else if (PD_name=='gev') {
+    gevpar <- fitgev$results
+    rdata <- evd::rgev(1001*length(data),shape = as.numeric(gevpar[3]),loc =as.numeric(gevpar[1]),scale = as.numeric(gevpar[2]))
+    dim(rdata) <- c(length(data), 1001)
+    func <- function(iter) {
+      res <- extRemes::fevd(rdata[, iter], threshold = min(rdata)-1, type = 'GEV',method = 'Lmoments')
+      par <- res$results
+      return(c(as.numeric(par[3]),as.numeric(par[1]),as.numeric(par[2])))
+    }
+    resboot <- t(sapply(1:1001, func))
+    resboot <- as.data.frame(resboot); colnames(resboot) = c("shape","loc","scale")
+  } else if (PD_name=='gpd') {
+    gpdpar <- fitgpd$results
+    rdata <- evd::rgpd(1001*length(data),loc = min(data)-1, scale = as.numeric(gpdpar[1]), shape = as.numeric(gpdpar[2]))
+    dim(rdata) <- c(length(data), 1001)
+    func <- function(iter) {
+      res <- extRemes::fevd(rdata[, iter], threshold = min(rdata)-1, type = 'GP',method = 'Lmoments')
+      par <- res$results
+      return(c(min(rdata[,iter])-1, as.numeric(par[1]), as.numeric(par[2])))
+    }
+    resboot <- t(sapply(1:1001, func))
+    resboot <- as.data.frame(resboot); colnames(resboot) = c("loc","scale","shape")
+  }  else if (PD_name=='invgauss') {
+    rdata <- actuar::rinvgauss(1001*length(data), mean = fitig[1,1],shape = fitig[2,1])
+    dim(rdata) <- c(length(data), 1001)
+    func <- function(iter) {
+      res <- goft::ig_fit(rdata[,iter])
+      return(c(res[1,1],res[2,1]))
+    }
+    resboot <- t(sapply(1:1001, func))
+    resboot <- as.data.frame(resboot); colnames(resboot) = c("mean","shape")
+  }
+  
+  return(list("PD_name"=PD_name,"ep"=ep,"v1"=V1,"pdf"=pdf, "emp"=emp, "STAT"=results2, "para"=para, parboot=resboot))
+  
+}
+###########################################################period 1
+setwd("E:\\Global_Stablity\\CMIP6_data\\Questions")
+dta<-read.table("CMIP6_parameter.csv",header=T, na.strings = "Na", sep=",")
+
+data_period1_1 = dta %>% dplyr::select(UID,WY_1901_1950,AI_1901_1950,m_1)
+data_period1_2 = dta %>% dplyr::select(UID,sen_1,cli_1,m2_1,cli2_1)
+
+#############PCA_period1_pca1_pca2
+data_period1_PCA1 <- prcomp(data_period1_1[,-1], scale = TRUE,center = TRUE, retx = T)
+
+my_pca.var <- data_period1_PCA1$sdev ^ 2
+my_pca.var / sum(my_pca.var)
+
+data_period1_PCA1 = as.data.frame(data_period1_PCA1$x[,1:2])
+data_period1_PCA1$PC1 = data_period1_PCA1$PC1 + 8
+data_period1_PCA1$PC2 = data_period1_PCA1$PC2 + 8
+
+#############PCA_period1_pca3_pca4
+data_period1_PCA2 <- prcomp(data_period1_2[,-1], scale = TRUE,center = TRUE, retx = T)
+
+my_pca.var <- data_period1_PCA2$sdev ^ 2
+my_pca.var / sum(my_pca.var)
+
+data_period1_PCA2 = as.data.frame(data_period1_PCA2$x[,1:2])
+data_period1_PCA2$PC1 = data_period1_PCA2$PC1 + 8
+data_period1_PCA2$PC2 = data_period1_PCA2$PC2 + 8
+
+best_fit_dist<-function (x,x1=10,x2=0.5) { 
+  set.seed(1)
+  # we know these data are normally distributed... 
+  
+  # let's compute some fits...
+  require(MASS)
+  dat=x
+  normal<-tryCatch({  fitdist(dat,"norm",method = "mle")}, 
+                   error = function(err) {return(NA)})
+  
+  gamma<-tryCatch({ fitdist(dat,"gamma",method = "mle")}, 
+                  error = function(err) {return(NA)})
+  
+  lognormal<-tryCatch({  fitdist(dat,"lnorm",method = "mle")}, 
+                      error = function(err) {return(NA)})
+  weibull<-tryCatch({ fitdist(dat,"weibull",method = "mle")}, 
+                    error = function(err) {return(NA)})
+  
+  
+  
+  fits=list( normal, gamma, lognormal,weibull )
+  sim={}
+  p_value={}
+  for (i in 1:4 ) { 
+    if   (!is.na (fits[[ i]][1])  ) {  
+      #sim=cbind(sim, gofstat(fits[[ i]]  )$chisq )
+      sim=cbind(sim, gofstat(fits[[ i]]  )$chisq )
+      #p_value =cbind(p_value, gofstat(fits[[ i]]  )$chisqpvalue )
+      p_value =cbind(p_value, gofstat(fits[[ i]]  )$chisqpvalue                
+                     
+      )
+    } else {
+      sim=cbind(sim, NA )
+      p_value=cbind(p_value,NA)
+      
+    }
+  }
+  chi=rbind(sim, p_value)
+  
+  
+  colnames(chi)<- c('normal',"gamma", "lognormal",'Weibull' )
+  # get the logliks for each model...
+  #max_log=sapply(fits, function(i) i$loglik)
+  #max_index<- which.max( max_log )
+  max_index<- which.min( sim)
+  
+  #max_index=5
+  paras=fits[[max_index]]
+  if (max_index==1) {
+    
+    v_cdf=pnorm(x,mean=paras$estimate[1],sd=paras$estimate[2] )
+    v1=pnorm(x1,mean=paras$estimate[1],sd=paras$estimate[2] )
+    v2=qnorm(x2,mean=paras$estimate[1],sd=paras$estimate[2] )
+    
+  } else if (max_index==4) {
+    v_cdf=pweibull(x,shape=paras$estimate[1],scale=paras$estimate[2] )
+    v1=pweibull(x1,shape=paras$estimate[1],scale=paras$estimate[2] )
+    v2=qweibull(x2,shape=paras$estimate[1],scale=paras$estimate[2] )
+    
+    
+    
+  }      else if (max_index==2) {
+    
+    v_cdf=pgamma(x,shape=paras$estimate[1],rate=paras$estimate[2] )
+    v1=pgamma(x1,shape=paras$estimate[1],rate=paras$estimate[2] )
+    v2=qgamma(x2,shape=paras$estimate[1],rate=paras$estimate[2] )
+  }      else if (max_index==3) {
+    
+    v_cdf= plnorm(x,meanlog=paras$estimate[1],sdlog=paras$estimate[2] )
+    v1= plnorm(x1,meanlog=paras$estimate[1],sdlog=paras$estimate[2] )
+    v2= qlnorm(x2,meanlog=paras$estimate[1],sdlog=paras$estimate[2] )
+  }    
+  
+  results<-list (v_cdf=v_cdf,v1=v1,v2=v2 , chi=chi)
+  return(results)
+  
+  
+}
+####  
+# margin = function(x){
+#   
+# fit_n  <- fitdistr(x, "normal")
+# 
+# marginals = pnorm(x, mean=fit_n$estimate[1], sd=fit_n$estimate[2])
+# 
+# return(marginals)
+# }
+
+
+
+data_period1_PCA2 = apply(data_period1_PCA2,2,fitalldist)
+data_period1_PCA1 = apply(data_period1_PCA1,2,fitalldist)
+
+data_period1_PCA2 = cbind(data_period1_PCA2$PC1$ep,data_period1_PCA2$PC2$ep)
+data_period1_PCA1 = cbind(data_period1_PCA1$PC1$ep,data_period1_PCA1$PC2$ep)
+
+data_final_margin = cbind(data_period1_PCA1,data_period1_PCA2) %>% as.data.frame()
+colnames(data_final_margin) = c("basin_PCA1","basin_PCA2","sen_PCA1","sen_PCA2")
+#CVM = RVineStructureSelect(data_final_margin, type="CVine")
+fit= vinecop(data_final_margin, family_set =c("archimedean","gaussian"),cores=2)
+
+pcs=fit$pair_copulas
+mat=fit$structure
+vc <- vinecop_dist(pcs, mat)
+u1<-pvinecop(data_final_margin[,], vc)
+
+
+###########################################################period 2 
+setwd("E:\\Global_Stablity\\CMIP6_data\\Questions")
+dta<-read.table("CMIP6_parameter.csv",header=T, na.strings = "Na", sep=",")
+
+data_period1_1 = dta %>% dplyr::select(UID,WY_2051_2100,AI_2051_2100,m_2)
+data_period1_2 = dta %>% dplyr::select(UID,sen_2,cli_2,m2_2,cli2_2)
+
+#############PCA_period1_pca1_pca2
+data_period1_PCA1 <- prcomp(data_period1_1[,-1], scale = TRUE,center = TRUE, retx = T)
+
+my_pca.var <- data_period1_PCA1$sdev ^ 2
+my_pca.var / sum(my_pca.var)
+
+data_period1_PCA1 = as.data.frame(data_period1_PCA1$x[,1:2])
+data_period1_PCA1$PC1 = data_period1_PCA1$PC1 + 8
+data_period1_PCA1$PC2 = data_period1_PCA1$PC2 + 8
+
+#############PCA_period1_pca3_pca4
+data_period1_PCA2 <- prcomp(data_period1_2[,-1], scale = TRUE,center = TRUE, retx = T)
+
+my_pca.var <- data_period1_PCA2$sdev ^ 2
+my_pca.var / sum(my_pca.var)
+
+data_period1_PCA2 = as.data.frame(data_period1_PCA2$x[,1:2])
+data_period1_PCA2$PC1 = data_period1_PCA2$PC1 + 8
+data_period1_PCA2$PC2 = data_period1_PCA2$PC2 + 8
+
+best_fit_dist<-function (x,x1=10,x2=0.5) { 
+  set.seed(1)
+  # we know these data are normally distributed... 
+  
+  # let's compute some fits...
+  require(MASS)
+  dat=x
+  normal<-tryCatch({  fitdist(dat,"norm",method = "mle")}, 
+                   error = function(err) {return(NA)})
+  
+  gamma<-tryCatch({ fitdist(dat,"gamma",method = "mle")}, 
+                  error = function(err) {return(NA)})
+  
+  lognormal<-tryCatch({  fitdist(dat,"lnorm",method = "mle")}, 
+                      error = function(err) {return(NA)})
+  weibull<-tryCatch({ fitdist(dat,"weibull",method = "mle")}, 
+                    error = function(err) {return(NA)})
+  
+  
+  
+  fits=list( normal, gamma, lognormal,weibull )
+  sim={}
+  p_value={}
+  for (i in 1:4 ) { 
+    if   (!is.na (fits[[ i]][1])  ) {  
+      #sim=cbind(sim, gofstat(fits[[ i]]  )$chisq )
+      sim=cbind(sim, gofstat(fits[[ i]]  )$chisq )
+      #p_value =cbind(p_value, gofstat(fits[[ i]]  )$chisqpvalue )
+      p_value =cbind(p_value, gofstat(fits[[ i]]  )$chisqpvalue                
+                     
+      )
+    } else {
+      sim=cbind(sim, NA )
+      p_value=cbind(p_value,NA)
+      
+    }
+  }
+  chi=rbind(sim, p_value)
+  
+  
+  colnames(chi)<- c('normal',"gamma", "lognormal",'Weibull' )
+  # get the logliks for each model...
+  #max_log=sapply(fits, function(i) i$loglik)
+  #max_index<- which.max( max_log )
+  max_index<- which.min( sim)
+  
+  #max_index=5
+  paras=fits[[max_index]]
+  if (max_index==1) {
+    
+    v_cdf=pnorm(x,mean=paras$estimate[1],sd=paras$estimate[2] )
+    v1=pnorm(x1,mean=paras$estimate[1],sd=paras$estimate[2] )
+    v2=qnorm(x2,mean=paras$estimate[1],sd=paras$estimate[2] )
+    
+  } else if (max_index==4) {
+    v_cdf=pweibull(x,shape=paras$estimate[1],scale=paras$estimate[2] )
+    v1=pweibull(x1,shape=paras$estimate[1],scale=paras$estimate[2] )
+    v2=qweibull(x2,shape=paras$estimate[1],scale=paras$estimate[2] )
+    
+    
+    
+  }      else if (max_index==2) {
+    
+    v_cdf=pgamma(x,shape=paras$estimate[1],rate=paras$estimate[2] )
+    v1=pgamma(x1,shape=paras$estimate[1],rate=paras$estimate[2] )
+    v2=qgamma(x2,shape=paras$estimate[1],rate=paras$estimate[2] )
+  }      else if (max_index==3) {
+    
+    v_cdf= plnorm(x,meanlog=paras$estimate[1],sdlog=paras$estimate[2] )
+    v1= plnorm(x1,meanlog=paras$estimate[1],sdlog=paras$estimate[2] )
+    v2= qlnorm(x2,meanlog=paras$estimate[1],sdlog=paras$estimate[2] )
+  }    
+  
+  results<-list (v_cdf=v_cdf,v1=v1,v2=v2 , chi=chi)
+  return(results)
+  
+  
+}
+####  
+# margin = function(x){
+#   
+# fit_n  <- fitdistr(x, "normal")
+# 
+# marginals = pnorm(x, mean=fit_n$estimate[1], sd=fit_n$estimate[2])
+# 
+# return(marginals)
+# }
+
+
+
+data_period1_PCA2 = apply(data_period1_PCA2,2,fitalldist)
+data_period1_PCA1 = apply(data_period1_PCA1,2,fitalldist)
+
+data_period1_PCA2 = cbind(data_period1_PCA2$PC1$ep,data_period1_PCA2$PC2$ep)
+data_period1_PCA1 = cbind(data_period1_PCA1$PC1$ep,data_period1_PCA1$PC2$ep)
+
+data_final_margin = cbind(data_period1_PCA1,data_period1_PCA2) %>% as.data.frame()
+colnames(data_final_margin) = c("basin_PCA1","basin_PCA2","sen_PCA1","sen_PCA2")
+#CVM = RVineStructureSelect(data_final_margin, type="CVine")
+fit= vinecop(data_final_margin, family_set =c("archimedean","gaussian"),cores=2)
+
+pcs=fit$pair_copulas
+mat=fit$structure
+vc <- vinecop_dist(pcs, mat)
+u2<-pvinecop(data_final_margin[,], vc)
+
+data_final = cbind(data_period1_1$UID,u1,u2)
+colnames(data_final) = c("UID","u1","u2")
+
+write.csv(data_final, "CMIP6_basins_stable_new_distribution.csv",row.names=F)
+
+data_final_plot = reshape2::melt(data_final[,2:3])
+
+median(u1)
+median(u2)
+
+ggplot(data =data_final_plot,aes(x = Var2,y= value,fill = Var2))+
+  geom_boxplot()+ theme_bw()+ylim(0,0.2)+
+  labs(x="Forest Increase", y = "d2(R/P)/dmd(P/PET)")+
+  theme(axis.text = element_text(face="plain",color="black", size=12),
+        axis.title=element_text(size=12,face="bold",color="black") ,
+        legend.position="none",strip.text = element_text(size=12))
+
+#####################
+
+cli_con = dta %>% dplyr::select(UID,AI_2051_2100,AI_1901_1950)
+cli_con$DI_1901_1950 = 1/cli_con$AI_1901_1950
+cli_con$DI_2051_2100 = 1/cli_con$AI_2051_2100
+cli_con$DI = (cli_con$DI_2051_2100+cli_con$DI_1901_1950)/2
+
+ApplyQuintiles1 <- function(x) {
+  cut(x, breaks=c(0,1,1.5,4,16,1000), 
+      labels=c("Humid","Semi-humid","semi-arid","Arid","Ex-arid"), include.lowest=TRUE)
+}
+cli_con$AI_Zone <- sapply(cli_con$DI, ApplyQuintiles1)
+
+all = merge(cli_con,data_final)
+all$delta_u = all$u2 - all$u1
+
+se <- function(x, na.rm=FALSE) {
+  if (na.rm) x <- na.omit(x)
+  sqrt(var(x)/length(x))
+}
+
+CZ_Zone_mean = all %>%
+  group_by(AI_Zone) %>%
+  summarise(mean = mean(delta_u, na.rm = TRUE),
+            median = median(delta_u, na.rm = TRUE))
+
+CZ_Zone_se = all %>%
+  group_by(AI_Zone) %>%
+  summarise(se = se(delta_u, na.rm = TRUE))
+
+stack = merge(CZ_Zone_mean,CZ_Zone_se)
+
+ggplot(data =stack,aes(x = AI_Zone,y=mean))+
+  geom_bar(stat = "identity",color = "black",position=position_dodge())+ theme_bw()+
+  geom_errorbar(aes(ymin=mean-2*se, ymax=mean+2*se), width=.2,
+                position=position_dodge(.9))+ labs(x="Climate zones", y = "Δ Probability")+
+  theme(axis.text = element_text(face="plain",color="black", size=14),axis.text.x=element_text(angle=0),
+        axis.title=element_text(size=14,face="bold",color="black") ,
+        legend.position="none",strip.text = element_text(size=14))
+#######################################################
+CZ_Zone_p1 = all %>%
+  group_by(AI_Zone) %>%
+  summarise(median = median(u1, na.rm = TRUE),
+            Q25 = quantile(u1,probs = 0.25,na.rm = T),
+            Q75 = quantile(u1,probs = 0.75,na.rm = T)) %>% transform(ID = "p1")
+
+CZ_Zone_p2 = all %>%
+  group_by(AI_Zone) %>%
+  summarise(median = median(u2, na.rm = TRUE),
+            Q25 = quantile(u2,probs = 0.25,na.rm = T),
+            Q75 = quantile(u2,probs = 0.75,na.rm = T)) %>% transform(ID = "p2")
+
+stack1 = rbind(CZ_Zone_p1,CZ_Zone_p2)
+
+ggplot(data =stack1,aes(x = AI_Zone,y=median,color = ID))+
+theme_bw()+
+  geom_errorbar(aes(ymin=Q25, ymax=Q75), width=.2,
+                position=position_dodge(.9))+
+  geom_point()+
+  labs(x="Climate zones", y = "Δ Probability")+
+  theme(axis.text = element_text(face="plain",color="black", size=20),axis.text.x=element_text(angle=60),
+        axis.title=element_text(size=20,face="bold",color="black") ,
+        legend.position="none",strip.text = element_text(size=18))
+
+###############################################
+
+data_final = cbind(data_period1_1$UID,u1,u2)
+
+write.csv(data_final, "CMIP6_basins_stable.csv",row.names=T)
+
+data_final_plot = reshape2::melt(data_final[,2:3])
+
+ggplot(data =data_final_plot,aes(x = Var2,y= value,fill = Var2))+
+  geom_boxplot()+ theme_bw()+ylim(0,0.2)+
+  labs(x="Forest Increase", y = "d2(R/P)/dmd(P/PET)")+
+  theme(axis.text = element_text(face="plain",color="black", size=12),
+        axis.title=element_text(size=12,face="bold",color="black") ,
+        legend.position="none",strip.text = element_text(size=12))
+#############################################################################################################################################no_period_just_for_all
+##############################################################
+
+setwd("E:\\Global_Stablity\\CMIP6_data\\Questions")
+dta<-read.table("CMIP6_parameter.csv",header=T, na.strings = "Na", sep=",")
+
+data_period1_1 = dta %>% dplyr::select(UID,WY_2051_2100,AI_2051_2100,m_2)
+data_period1_2 = dta %>% dplyr::select(UID,sen_2,cli_2,m2_2,cli2_2)
+
+#############PCA_period1_pca1_pca2
+data_period1_PCA1 <- prcomp(data_period1_1[,-1], scale = TRUE,center = TRUE, retx = T)
+
+my_pca.var <- data_period1_PCA1$sdev ^ 2
+my_pca.var / sum(my_pca.var)
+
+data_period1_PCA1 = as.data.frame(data_period1_PCA1$x[,1:2])
+data_period1_PCA1$PC1 = data_period1_PCA1$PC1 + 8
+data_period1_PCA1$PC2 = data_period1_PCA1$PC2 + 8
+
+#############PCA_period1_pca3_pca4
+data_period1_PCA2 <- prcomp(data_period1_2[,-1], scale = TRUE,center = TRUE, retx = T)
+
+my_pca.var <- data_period1_PCA2$sdev ^ 2
+my_pca.var / sum(my_pca.var)
+
+data_period1_PCA2 = as.data.frame(data_period1_PCA2$x[,1:2])
+data_period1_PCA2$PC1 = data_period1_PCA2$PC1 + 8
+data_period1_PCA2$PC2 = data_period1_PCA2$PC2 + 8
+
+
+data_period1_PCA2 = apply(data_period1_PCA2,2,fitalldist)
+data_period1_PCA1 = apply(data_period1_PCA1,2,fitalldist)
+
+data_period1_PCA2 = cbind(data_period1_PCA2$PC1$ep,data_period1_PCA2$PC2$ep)
+data_period1_PCA1 = cbind(data_period1_PCA1$PC1$ep,data_period1_PCA1$PC2$ep)
+
+data_final_margin = cbind(data_period1_PCA1,data_period1_PCA2) %>% as.data.frame()
+colnames(data_final_margin) = c("basin_PCA1","basin_PCA2","sen_PCA1","sen_PCA2")
+#CVM = RVineStructureSelect(data_final_margin, type="CVine")
+fit= vinecop(data_final_margin, family_set =c("archimedean","gaussian"),cores=2)
+
+pcs=fit$pair_copulas
+mat=fit$structure
+vc <- vinecop_dist(pcs, mat)
+u2<-pvinecop(data_final_margin[,], vc)
+
+data_final = cbind(data_period1_1$UID,u1,u2)
+colnames(data_final) = c("UID","u1","u2")
+
+write.csv(data_final, "CMIP6_basins_stable_new_distribution.csv",row.names=F)
+
+data_final_plot = reshape2::melt(data_final[,2:3])
+
+ggplot(data =data_final_plot,aes(x = Var2,y= value,fill = Var2))+
+  geom_boxplot()+ theme_bw()+ylim(0,0.2)+
+  labs(x="Forest Increase", y = "d2(R/P)/dmd(P/PET)")+
+  theme(axis.text = element_text(face="plain",color="black", size=12),
+        axis.title=element_text(size=12,face="bold",color="black") ,
+        legend.position="none",strip.text = element_text(size=12))
+
+#############################################################################
+setwd("E:\\Global_Stablity\\CMIP6_data\\Questions")
+dt1<-read.table("CMIP6_basins_stable_new_distribution.csv",header=T, na.strings = "Na", sep=",")
+dt2<-read.table("CMIP6_parameter.csv",header=T, na.strings = "Na", sep=",")
+dta = merge(dt1,dt2)
+
+
+cli_con = dta %>% dplyr::select(UID,AI_2051_2100,AI_1901_1950)
+cli_con$DI_1901_1950 = 1/cli_con$AI_1901_1950
+cli_con$DI_2051_2100 = 1/cli_con$AI_2051_2100
+cli_con$DI = (cli_con$DI_2051_2100+cli_con$DI_1901_1950)/2
+
+ApplyQuintiles1 <- function(x) {
+  cut(x, breaks=c(0,1,1.5,4,16,1000), 
+      labels=c("Humid","Semi-humid","semi-arid","Arid","Ex-arid"), include.lowest=TRUE)
+}
+cli_con$AI_Zone <- sapply(cli_con$DI, ApplyQuintiles1)
+
+all = merge(cli_con,dt1)
+all$delta_u = all$u2 - all$u1
+
+se <- function(x, na.rm=FALSE) {
+  if (na.rm) x <- na.omit(x)
+  sqrt(var(x)/length(x))
+}
+
+CZ_Zone_mean = all %>%
+  group_by(AI_Zone) %>%
+  summarise(u1 = mean(u1, na.rm = TRUE),
+            u2 = mean(u2, na.rm = TRUE))
+
+CZ_Zone_se = all %>%
+  group_by(AI_Zone) %>%
+  summarise(se_1 = se(u1, na.rm = TRUE),
+            se_2 = se(u2, na.rm = TRUE))
+
+stack = merge(CZ_Zone_mean,CZ_Zone_se)
+
+ggplot(data =stack,aes(x = AI_Zone,y=mean))+
+  geom_bar(stat = "identity",color = "black",position=position_dodge())+ theme_bw()+
+  geom_errorbar(aes(ymin=mean-2*se, ymax=mean+2*se), width=.2,
+                position=position_dodge(.9))+ labs(x="Climate zones", y = "Δ Probability")+
+  theme(axis.text = element_text(face="plain",color="black", size=14),axis.text.x=element_text(angle=0),
+        axis.title=element_text(size=14,face="bold",color="black") ,
+        legend.position="none",strip.text = element_text(size=14))
+
+
+
+
+
+
+
+
+
+
+
