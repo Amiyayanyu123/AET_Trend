@@ -1,0 +1,346 @@
+library(raster)
+library(xts)
+library(lubridate)
+library(ggstatsplot)
+library(rsq)
+library(extrafont)
+library(car)
+library(bfast)
+library(remotes)
+library(ggpmisc)
+library(dplyr)
+library(lubridate)
+library(mice)
+library(VIM)
+library(ggpubr)
+#################################################################################################################LAI
+setwd("F:\\Global_AET_regression_trend_1\\Datasets\\regression_linear\\origin_data_ridge_mutivariate")
+
+filenames <- list.files(pattern="LAI", full.names=TRUE)
+
+ldf <- lapply(filenames, stack)
+
+stk1 <- terra::rast(filenames)
+
+multi_frame <-
+  as.data.frame(stk1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+weight <- cos(multi_frame[,"y"]*(pi/180))
+multi_frame[,3:25] = apply(multi_frame[,3:25],2,function(x){x*weight})
+multi_frame = multi_frame %>% filter_all(all_vars(. <= quantile(., 0.99, na.rm = TRUE)
+                                         & . >= quantile(., 0.01, na.rm = TRUE)))
+#
+se <- function(x, na.rm=FALSE) {
+  if (na.rm) x <- na.omit(x)
+  sqrt(var(x)/length(x))
+}
+##################################
+multi_long = multi_frame %>% dplyr::select(-x,-y) %>% reshape2::melt()
+statis_plot = multi_long %>% 
+  group_by(variable) %>%
+  summarise(mean = mean(value, na.rm = TRUE),
+            se = se(value, na.rm = TRUE))%>% transform(UID = "1")
+statis_plot$ID = substr(statis_plot$variable,7,9) %>% as.numeric() + 1989
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(LAI_ET0 > 0) %>% dplyr::select(-x,-y) %>% reshape2::melt()
+statis_plot_1 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(mean = mean(value, na.rm = TRUE),
+            se = se(value, na.rm = TRUE))%>% transform(UID = "2")
+statis_plot_1$ID = substr(statis_plot_1$variable,7,9) %>% as.numeric() + 1989
+
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(LAI_ET0 < 0) %>% dplyr::select(-x,-y) %>% reshape2::melt()
+statis_plot_2 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(mean = mean(value, na.rm = TRUE),
+            se = se(value, na.rm = TRUE))  %>% transform(UID = "3")
+statis_plot_2$ID = substr(statis_plot_2$variable,7,9) %>% as.numeric() + 1989
+####################
+library(devtools)
+all1 = rbind(statis_plot,statis_plot_1)
+all2 = rbind(all1,statis_plot_2)
+scaleFUN <- function(x) sprintf("%.2f", x)
+#
+A2 = ggplot(all2, aes(x=ID, y= mean,color = UID,fill = UID))+ geom_ribbon(aes(ymin=mean - 2*se, ymax=mean + 2*se),alpha=0.2,colour = NA)+
+  geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  stat_poly_eq(formula = y ~ x,aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+               parse=TRUE,label.y.npc = "bottom",label.x.npc = "right",size = 6)+ scale_y_continuous(labels=scaleFUN)+
+  labs(x="Year", y = "Slope(ET,LAI)") +scale_color_manual(values=c("#ffa60f","#ed5a65","#2486b9"))+
+  scale_fill_manual(values=c("#ffa60f","#ed5a65","#2486b9"))+
+  theme(axis.title=element_text(size=20,face="bold",color="black"),
+        axis.text = element_text(size=18,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=18),
+        legend.position="none",
+        legend.text = element_text(size=18
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+
+
+#################################################################################################################VPD
+setwd("F:\\Global_AET_regression_trend_1\\Datasets\\regression_linear\\origin_data_ridge_mutivariate")
+
+filenames <- list.files(pattern="VPD", full.names=TRUE)
+
+ldf <- lapply(filenames, stack)
+
+stk1 <- terra::rast(filenames)
+
+multi_frame <-
+  as.data.frame(stk1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+weight <- cos(multi_frame[,"y"]*(pi/180))
+multi_frame[,3:25] = apply(multi_frame[,3:25],2,function(x){x*weight})
+multi_frame = multi_frame %>% filter_all(all_vars(. <= quantile(., 0.99, na.rm = TRUE)
+                                                  & . >= quantile(., 0.01, na.rm = TRUE)))
+se <- function(x, na.rm=FALSE) {
+  if (na.rm) x <- na.omit(x)
+  sqrt(var(x)/length(x))
+}
+##################################
+multi_long = multi_frame %>% dplyr::select(-x,-y) %>% reshape2::melt()
+statis_plot = multi_long %>% 
+  group_by(variable) %>%
+  summarise(mean = mean(value, na.rm = TRUE),
+            se = se(value, na.rm = TRUE))%>% transform(UID = "1")
+statis_plot$ID = substr(statis_plot$variable,7,9) %>% as.numeric() + 1989
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(vpd_ET0 > 0) %>% dplyr::select(-x,-y) %>% reshape2::melt()
+statis_plot_1 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(mean = mean(value, na.rm = TRUE),
+            se = se(value, na.rm = TRUE))%>% transform(UID = "2")
+statis_plot_1$ID = substr(statis_plot_1$variable,7,9) %>% as.numeric() + 1989
+
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(vpd_ET0 < 0) %>% dplyr::select(-x,-y) %>% reshape2::melt()
+statis_plot_2 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(mean = mean(value, na.rm = TRUE),
+            se = se(value, na.rm = TRUE))  %>% transform(UID = "3")
+statis_plot_2$ID = substr(statis_plot_2$variable,7,9) %>% as.numeric() + 1989
+####################
+library(devtools)
+all1 = rbind(statis_plot,statis_plot_1)
+all2 = rbind(all1,statis_plot_2)
+scaleFUN <- function(x) sprintf("%.2f", x)
+#
+B2 = ggplot(all2, aes(x=ID, y= mean,color = UID,fill = UID))+ geom_ribbon(aes(ymin=mean - 2*se, ymax=mean + 2*se),alpha=0.2,colour = NA)+
+  geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  stat_poly_eq(formula = y ~ x,aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+               parse=TRUE,label.x.npc = "right",size = 6)+ scale_y_continuous(labels=scaleFUN)+
+  labs(x="Year", y = "Slope(ET,VPD)") +scale_color_manual(values=c("#ffa60f","#ed5a65","#2486b9"))+
+  scale_fill_manual(values=c("#ffa60f","#ed5a65","#2486b9"))+
+  theme(axis.title=element_text(size=20,face="bold",color="black"),
+        axis.text = element_text(size=18,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=18),
+        legend.position="none",
+        legend.text = element_text(size=18
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+
+#################################################################################################################VPD
+setwd("F:\\Global_AET_regression_trend_1\\Datasets\\regression_linear\\origin_data_ridge_mutivariate")
+
+filenames <- list.files(pattern="srad", full.names=TRUE)
+
+ldf <- lapply(filenames, stack)
+
+stk1 <- terra::rast(filenames)
+
+multi_frame <-
+  as.data.frame(stk1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+weight <- cos(multi_frame[,"y"]*(pi/180))
+multi_frame[,3:25] = apply(multi_frame[,3:25],2,function(x){x*weight})
+multi_frame = multi_frame %>% filter_all(all_vars(. <= quantile(., 0.99, na.rm = TRUE)
+                                                  & . >= quantile(., 0.01, na.rm = TRUE)))
+se <- function(x, na.rm=FALSE) {
+  if (na.rm) x <- na.omit(x)
+  sqrt(var(x)/length(x))
+}
+##################################
+multi_long = multi_frame %>% dplyr::select(-x,-y) %>% reshape2::melt()
+statis_plot = multi_long %>% 
+  group_by(variable) %>%
+  summarise(mean = mean(value, na.rm = TRUE),
+            se = se(value, na.rm = TRUE))%>% transform(UID = "1")
+statis_plot$ID = substr(statis_plot$variable,8,10) %>% as.numeric() + 1989
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(srad_ET0 > 0) %>% dplyr::select(-x,-y) %>% reshape2::melt()
+statis_plot_1 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(mean = mean(value, na.rm = TRUE),
+            se = se(value, na.rm = TRUE))%>% transform(UID = "2")
+statis_plot_1$ID =  substr(statis_plot$variable,8,10) %>% as.numeric() + 1989
+
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(srad_ET0 < 0) %>% dplyr::select(-x,-y) %>% reshape2::melt()
+statis_plot_2 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(mean = mean(value, na.rm = TRUE),
+            se = se(value, na.rm = TRUE))  %>% transform(UID = "3")
+statis_plot_2$ID =  substr(statis_plot$variable,8,10) %>% as.numeric() + 1989
+####################
+library(devtools)
+all1 = rbind(statis_plot,statis_plot_1)
+all2 = rbind(all1,statis_plot_2)
+scaleFUN <- function(x) sprintf("%.2f", x)
+#
+C2 = ggplot(all2, aes(x=ID, y= mean,color = UID,fill = UID))+ geom_ribbon(aes(ymin=mean - 2*se, ymax=mean + 2*se),alpha=0.2,colour = NA)+
+  geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  stat_poly_eq(formula = y ~ x,aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+               parse=TRUE,label.x.npc = "right",size = 6)+ scale_y_continuous(labels=scaleFUN)+
+  labs(x="Year", y = "Slope(ET,Rs)") +scale_color_manual(values=c("#ffa60f","#ed5a65","#2486b9"))+
+  scale_fill_manual(values=c("#ffa60f","#ed5a65","#2486b9"))+
+  theme(axis.title=element_text(size=20,face="bold",color="black"),
+        axis.text = element_text(size=18,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=18),
+        legend.position="none",
+        legend.text = element_text(size=18
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+#################################################################################################################VPD
+setwd("F:\\Global_AET_regression_trend_1\\Datasets\\regression_linear\\origin_data_ridge_mutivariate")
+
+filenames <- list.files(pattern="Temp", full.names=TRUE)
+
+ldf <- lapply(filenames, stack)
+
+stk1 <- terra::rast(filenames)
+
+multi_frame <-
+  as.data.frame(stk1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+weight <- cos(multi_frame[,"y"]*(pi/180))
+multi_frame[,3:25] = apply(multi_frame[,3:25],2,function(x){x*weight})
+multi_frame = multi_frame %>% filter_all(all_vars(. <= quantile(., 0.99, na.rm = TRUE)
+                                                  & . >= quantile(., 0.01, na.rm = TRUE)))
+se <- function(x, na.rm=FALSE) {
+  if (na.rm) x <- na.omit(x)
+  sqrt(var(x)/length(x))
+}
+##################################
+multi_long = multi_frame %>% dplyr::select(-x,-y) %>% reshape2::melt()
+statis_plot = multi_long %>% 
+  group_by(variable) %>%
+  summarise(mean = mean(value, na.rm = TRUE),
+            se = se(value, na.rm = TRUE))%>% transform(UID = "1")
+statis_plot$ID = substr(statis_plot$variable,9,14) %>% as.numeric() + 1989
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(tmean_ET0 > 0) %>% dplyr::select(-x,-y) %>% reshape2::melt()
+statis_plot_1 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(mean = mean(value, na.rm = TRUE),
+            se = se(value, na.rm = TRUE))%>% transform(UID = "2")
+statis_plot_1$ID = substr(statis_plot$variable,9,14) %>% as.numeric() + 1989
+
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(tmean_ET0 < 0) %>% dplyr::select(-x,-y) %>% reshape2::melt()
+statis_plot_2 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(mean = mean(value, na.rm = TRUE),
+            se = se(value, na.rm = TRUE))  %>% transform(UID = "3")
+statis_plot_2$ID = substr(statis_plot$variable,9,14) %>% as.numeric() + 1989
+####################
+library(devtools)
+all1 = rbind(statis_plot,statis_plot_1)
+all2 = rbind(all1,statis_plot_2)
+scaleFUN <- function(x) sprintf("%.2f", x)
+#
+D2 = ggplot(all2, aes(x=ID, y= mean,color = UID,fill = UID))+ geom_ribbon(aes(ymin=mean - 2*se, ymax=mean + 2*se),alpha=0.2,colour = NA)+
+  geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  stat_poly_eq(formula = y ~ x,aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+               parse=TRUE,label.x.npc = "right",size = 6)+ scale_y_continuous(labels=scaleFUN)+
+  labs(x="Year", y = "Slope(ET,Temp)") +scale_color_manual(values=c("#ffa60f","#ed5a65","#2486b9"))+
+  scale_fill_manual(values=c("#ffa60f","#ed5a65","#2486b9"))+
+  theme(axis.title=element_text(size=20,face="bold",color="black"),
+        axis.text = element_text(size=18,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=18),
+        legend.position="none",
+        legend.text = element_text(size=18
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+
+#################################################################################################################VPD
+setwd("F:\\Global_AET_regression_trend_1\\Datasets\\regression_linear\\origin_data_ridge_mutivariate")
+
+filenames <- list.files(pattern="Pre", full.names=TRUE)
+
+ldf <- lapply(filenames, stack)
+
+stk1 <- terra::rast(filenames)
+
+multi_frame <-
+  as.data.frame(stk1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+weight <- cos(multi_frame[,"y"]*(pi/180))
+multi_frame[,3:25] = apply(multi_frame[,3:25],2,function(x){x*weight})
+multi_frame = multi_frame %>% filter_all(all_vars(. <= quantile(., 0.99, na.rm = TRUE)
+                                                  & . >= quantile(., 0.01, na.rm = TRUE)))
+#
+se <- function(x, na.rm=FALSE) {
+  if (na.rm) x <- na.omit(x)
+  sqrt(var(x)/length(x))
+}
+##################################
+multi_long = multi_frame %>% dplyr::select(-x,-y) %>% reshape2::melt()
+statis_plot = multi_long %>% 
+  group_by(variable) %>%
+  summarise(mean = median(value, na.rm = TRUE),
+            se = se(value, na.rm = TRUE))%>% transform(UID = "1")
+statis_plot$ID = substr(statis_plot$variable,6,14) %>% as.numeric() + 1989
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(pr_ET0 > 0) %>% dplyr::select(-x,-y) %>% reshape2::melt()
+statis_plot_1 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(mean = median(value, na.rm = TRUE),
+            se = se(value, na.rm = TRUE))%>% transform(UID = "2")
+statis_plot_1$ID = substr(statis_plot$variable,6,14) %>% as.numeric() + 1989
+
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(pr_ET0 < 0) %>% dplyr::select(-x,-y) %>% reshape2::melt()
+statis_plot_2 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(mean = median(value, na.rm = TRUE),
+            se = se(value, na.rm = TRUE))  %>% transform(UID = "3")
+statis_plot_2$ID = substr(statis_plot$variable,6,14) %>% as.numeric() + 1989
+####################
+library(devtools)
+all1 = rbind(statis_plot,statis_plot_1)
+all2 = rbind(all1,statis_plot_2)
+scaleFUN <- function(x) sprintf("%.2f", x)
+#
+E2 = ggplot(all2, aes(x=ID, y= mean,color = UID,fill = UID))+ geom_ribbon(aes(ymin=mean -2*se , ymax=mean+2*se),alpha=0.2,colour = NA)+
+  geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  stat_poly_eq(formula = y ~ x,aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+               parse=TRUE,label.y.npc = "bottom",label.x.npc = "right",size = 6)+ scale_y_continuous(labels=scaleFUN)+
+  labs(x="Year", y = "Slope(ET,Pre)") +scale_color_manual(values=c("#ffa60f","#ed5a65","#2486b9"))+
+  scale_fill_manual(values=c("#ffa60f","#ed5a65","#2486b9"))+
+  theme(axis.title=element_text(size=20,face="bold",color="black"),
+        axis.text = element_text(size=18,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=18),
+        legend.position="none",
+        legend.text = element_text(size=18
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+
+##########################################
+ggarrange(A2,B2,C2,D2,E2,
+          labels = c("(a)", "(b)", "(c)","(d)","(e)"),
+          ncol = 2, nrow = 3)
