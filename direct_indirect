@@ -1,0 +1,283 @@
+##############################zhou frame to analysis the R/P loss
+library(reshape2)
+library(tidyverse)
+library(bootstrap)
+library(QuantPsyc)  
+library(relaimpo)
+library(psych)
+library(ggplot2)
+library(nlme)
+library(ape)
+library(MuMIn)
+library(ggstatsplot)
+library(extrafont)
+windowsFonts(Times=windowsFont("TT Arial"))
+
+setwd("F:\\NF_PF\\NF_PF_basins_WY\\Arid\\data\\basins_7_only_forest")
+dt1<-read.table("basins_7_all1.csv",header=T, na.strings = "Na", sep=",")
+dt2<-read.table("basins_7_all2.csv",header=T, na.strings = "Na", sep=",")
+dt3<-read.table("basins_7_xy.csv",header=T, na.strings = "Na", sep=",")
+dt4<-read.table("basins_7_harmon.csv",header=T, na.strings = "Na", sep=",")
+dt5<-read.table("Basins7_KP.csv",header=T, na.strings = "Na", sep=",")
+dt6<-read.table("basins7_climate_1995_2019.csv",header=T, na.strings = "Na", sep=",")
+dt7<-read.table("WUE.csv",header=T, na.strings = "Na", sep=",")
+
+colnames(dt3) = c("PFAF_ID","x","y")
+data = merge(dt1,dt2)
+data = merge(data,dt3)
+data = merge(data,dt4)
+data = merge(data,dt5)
+data = merge(data,dt6)
+data_all = merge(data,dt7)
+
+data = na.omit(data_all)
+data$DI = data$Pre_1995_2019/data$PET_1995_2019
+data$R_1995_2019 =data$Pre_1995_2019 - data$ET_1995_2019
+data$WY_1995_2019 = (data$Pre_1995_2019 - data$ET_1995_2019)/data$Pre_1995_2019
+ApplyQuintiles <- function(x) {
+  cut(x, breaks=c(1,3,7,16,30), 
+      labels=c("E","A","T","S"), include.lowest=TRUE)
+}
+data$Climate <- sapply(data$CZ, ApplyQuintiles)
+
+data = data %>% filter( data$WY_2010_2019 > 0 & data$WY_1995_2004 > 0 & data$WY_1995_2019 > 0
+                        & data$ET_2010_2019 < data$PET_2010_2019
+                        & data$ET_1995_2004 < data$PET_1995_2004 & data$ET_1995_2019 < data$PET_1995_2019 & data$DI < 0.5)
+
+data$R_2010_2019 =data$Pre_2010_2019 - data$ET_2010_2019
+data$R_1995_2004 =data$Pre_1995_2004 - data$ET_1995_2004
+
+
+data = na.omit(data)
+
+data_sub = data %>% dplyr::select(PFAF_ID,PET_2010_2019,R_2010_2019,Pre_2010_2019)
+colnames(data_sub) = c("PFAF_ID","PET","R","P")
+num_b = nrow(data_sub)
+
+f <- function(x,r,p,pet) {
+  (r/p)+((p/pet)^(-1))-(1+(p/pet)^(-x))^(1/x)
+}
+
+w = {}
+ID = {}
+for(i in 1:num_b){    
+  dt_sub= data_sub[i,]   
+  res <- uniroot(f, interval = c(0,100),extendInt = "yes", r=dt_sub$R,p=dt_sub$P,pet=dt_sub$PET)$root
+  w = rbind(w,res)
+  ID = rbind(ID,dt_sub$PFAF_ID)
+}
+budyko_w_1 = cbind(ID,w)
+budyko_w_1 = as.data.frame(budyko_w_1)
+colnames(budyko_w_1) = c("PFAF_ID","m_1")
+
+##########
+data_sub_1 = merge(data_sub,budyko_w_1)
+data_sub_1 = data_sub_1 %>% filter( data_sub_1$m_1 > 1)
+
+sensitivity <- function(r,p,pet,m) {
+  s = -((1+(p/pet)^(-m))^(1/m))*((1/(m^2))*log(1+(p/pet)^(-m))+
+                                   (1/m)*((p/pet)^(-m))*((log(p/pet))/(1+(p/pet)^(-m))))
+  return(s)
+}
+
+
+res <- sensitivity(r=data_sub_1$R,p=data_sub_1$P,pet=data_sub_1$PET,m=data_sub_1$m_1)
+res_sen_1 = cbind(data_sub_1$PFAF_ID,res)
+colnames(res_sen_1) = c("PFAF_ID","sen_1")
+##########
+data_sub_1 = merge(data_sub,budyko_w_1)
+data_sub_1 = data_sub_1 %>% filter( data_sub_1$m_1 > 1)
+
+sensitivity_climate <- function(p,pet,m) {
+  s =  (p/pet)^(-2)-(((p/pet)^(-m-1))*((1+(p/pet)^(-m))^((1-m)/m)))
+  return(s)
+}
+
+res_climate <- sensitivity_climate(p=data_sub_1$P,pet=data_sub_1$PET,m=data_sub_1$m_1)
+res_sen_climate_1 = cbind(data_sub_1$PFAF_ID,res_climate)
+colnames(res_sen_climate_1) = c("PFAF_ID","cli_1")
+
+############################################################
+data_sub = data %>% dplyr::select(PFAF_ID,PET_1995_2004,R_1995_2004,Pre_1995_2004)
+colnames(data_sub) = c("PFAF_ID","PET","R","P")
+
+f <- function(x,r,p,pet) {
+  (r/p)+((p/pet)^(-1))-(1+(p/pet)^(-x))^(1/x)
+}
+
+w = {}
+ID = {}
+for(i in 1:num_b){    
+  dt_sub= data_sub[i,]   
+  res <- uniroot(f, interval = c(0, 100),extendInt = "yes", r=dt_sub$R,p=dt_sub$P,pet=dt_sub$PET)$root
+  w = rbind(w,res)
+  ID = rbind(ID,dt_sub$PFAF_ID)
+}
+budyko_w_2 = cbind(ID,w)
+budyko_w_2 = as.data.frame(budyko_w_2)
+colnames(budyko_w_2) = c("PFAF_ID","m_2")
+############
+data_sub_2 = merge(data_sub,budyko_w_2)
+data_sub_2 = data_sub_2 %>% filter( data_sub_2$m_2 > 1)
+
+sensitivity <- function(r,p,pet,m) {
+  s = -((1+(p/pet)^(-m))^(1/m))*((1/(m^2))*log(1+(p/pet)^(-m))+
+                                   (1/m)*((p/pet)^(-m))*((log(p/pet))/(1+(p/pet)^(-m))))
+  return(s)
+}
+
+
+res <- sensitivity(r=data_sub_2$R,p=data_sub_2$P,pet=data_sub_2$PET,m=data_sub_2$m_2)
+res_sen_2 = cbind(data_sub_2$PFAF_ID,res)
+colnames(res_sen_2) = c("PFAF_ID","sen_2")
+##########
+data_sub_2 = merge(data_sub,budyko_w_2)
+data_sub_2 = data_sub_2 %>% filter( data_sub_2$m_2 > 1)
+
+sensitivity_climate <- function(p,pet,m) {
+  s =  (p/pet)^(-2)-(((p/pet)^(-m-1))*((1+(p/pet)^(-m))^((1-m)/m)))
+  return(s)
+}
+
+res_climate <- sensitivity_climate(p=data_sub_2$P,pet=data_sub_2$PET,m=data_sub_2$m_2)
+res_sen_climate_2 = cbind(data_sub_2$PFAF_ID,res_climate)
+colnames(res_sen_climate_2) = c("PFAF_ID","cli_2")
+#################################################################
+data_sub = data %>% dplyr::select(PFAF_ID,PET_1995_2019,R_1995_2019,Pre_1995_2019)
+colnames(data_sub) = c("PFAF_ID","PET","R","P")
+
+f <- function(x,r,p,pet) {
+  (r/p)+((p/pet)^(-1))-(1+(p/pet)^(-x))^(1/x)
+}
+
+w = {}
+ID = {}
+for(i in 1:num_b){    
+  dt_sub= data_sub[i,]   
+  res <- uniroot(f, interval = c(0,100),extendInt = "yes", r=dt_sub$R,p=dt_sub$P,pet=dt_sub$PET)$root
+  w = rbind(w,res)
+  ID = rbind(ID,dt_sub$PFAF_ID)
+}
+budyko_w_3 = cbind(ID,w)
+budyko_w_3 = as.data.frame(budyko_w_3)
+colnames(budyko_w_3) = c("PFAF_ID","m_3")
+
+data_sub_3 = merge(data_sub,budyko_w_3)
+data_sub_3 = data_sub_3 %>% filter( data_sub_3$m_3 > 1)
+
+sensitivity <- function(r,p,pet,m) {
+  s = -((1+(p/pet)^(-m))^(1/m))*((1/(m^2))*log(1+(p/pet)^(-m))+
+                                   (1/m)*((p/pet)^(-m))*((log(p/pet))/(1+(p/pet)^(-m))))
+  return(s)
+}
+
+
+res <- sensitivity(r=data_sub_3$R,p=data_sub_3$P,pet=data_sub_3$PET,m=data_sub_3$m_3)
+res_sen_3 = cbind(data_sub_3$PFAF_ID,res)
+colnames(res_sen_3) = c("PFAF_ID","sen_3")
+##########
+data_sub_3 = merge(data_sub,budyko_w_3)
+data_sub_3 = data_sub_3 %>% filter( data_sub_3$m_3 > 1)
+
+sensitivity_climate <- function(p,pet,m) {
+  s =  (p/pet)^(-2)-(((p/pet)^(-m-1))*((1+(p/pet)^(-m))^((1-m)/m)))
+  return(s)
+}
+
+res_climate <- sensitivity_climate(p=data_sub_3$P,pet=data_sub_3$PET,m=data_sub_3$m_3)
+res_sen_climate_3 = cbind(data_sub_3$PFAF_ID,res_climate)
+colnames(res_sen_climate_3) = c("PFAF_ID","cli_3")
+###############################
+data_final_1 = merge(res_sen_1,res_sen_2)
+data_final_2 = merge(budyko_w_1,budyko_w_2)
+data_final_3 = merge(data_final_1,data_final_2)
+data_final = merge(data_final_3,data)
+data_final = merge(data_final,res_sen_3)
+data_final = merge(data_final,budyko_w_3)
+data_final = merge(data_final,res_sen_climate_1)
+data_final = merge(data_final,res_sen_climate_2)
+data_final = merge(data_final,res_sen_climate_3)
+
+PF_dataset_in = data_final %>% filter( data_final$PF_ALL > 0.5 & data_final$Delta_2000_2015 > 0 )
+PF_dataset_in = transform(PF_dataset_in, type = "PF_in")
+
+NF_dataset_in = data_final %>% filter(  data_final$NF_1 > 0.5  & data_final$Delta_2000_2015 > 0 )
+NF_dataset_in = transform(NF_dataset_in, type = "NF_in")
+
+dta <- qpcR:::rbind.na(PF_dataset_in,NF_dataset_in)
+
+dta$DI_2010_2019 = dta$Pre_2010_2019/dta$PET_2010_2019
+dta$DI_1995_2004 = dta$Pre_1995_2004/dta$PET_1995_2004
+
+Qpart <- function(e,x2,x1) {
+  s = e*(x2-x1)
+  return(s)
+}
+
+Q_m <- Qpart(e=dta$sen_3,x2 = dta$m_1,x1 = dta$m_2)
+
+Q_cli <- Qpart(e=dta$cli_3,x2 = dta$DI_2010_2019,x1 = dta$DI_1995_2004)
+
+####################
+Q_direct_m =  Qpart(e=dta$sen_1,x2 = dta$m_1,x1 = dta$m_2)
+
+Q_direct_cli <- Qpart(e=dta$cli_1,x2 = dta$DI_2010_2019,x1 = dta$DI_1995_2004)
+
+Q_indirect_m = Q_m - Q_direct_m
+
+Q_indirect_cli = Q_cli - Q_direct_cli
+
+data_Q_all = cbind(dta,Q_m,Q_cli,Q_direct_m,Q_direct_cli,Q_indirect_m,Q_indirect_cli)
+###############
+Epart <- function(e,WY,x) {
+  s = e*(x/WY)
+  return(s)
+}
+
+E_m_2010_2019 <- Epart(e=dta$sen_1,WY = dta$WY_2010_2019,x = dta$m_1)
+
+E_cli_2010_2019 <- Epart(e=dta$cli_1,WY = dta$WY_2010_2019,x = dta$DI_2010_2019)
+
+E_m_1995_2004 <- Epart(e=dta$sen_2,WY = dta$WY_1995_2004,x = dta$m_2)
+
+E_cli_1995_2004 <- Epart(e=dta$cli_2,WY = dta$WY_1995_2004,x = dta$DI_1995_2004)
+
+data_Q_all = cbind(data_Q_all,E_m_2010_2019,E_cli_2010_2019,E_m_1995_2004,E_cli_1995_2004)
+
+data_Q_all$C_m_directe = abs(data_Q_all$Q_direct_m)/(abs(data_Q_all$Q_direct_m) + abs(data_Q_all$Q_m - data_Q_all$Q_direct_m))
+data_Q_all$C_m_indirecte = abs(data_Q_all$Q_m - data_Q_all$Q_direct_m)/(abs(data_Q_all$Q_direct_m) + abs(data_Q_all$Q_m - data_Q_all$Q_direct_m))
+
+data_Q_all$C_cli_directe = abs(data_Q_all$Q_direct_cli)/(abs(data_Q_all$Q_direct_cli) + abs(data_Q_all$Q_cli - data_Q_all$Q_direct_cli))
+data_Q_all$C_cli_indirecte = abs(data_Q_all$Q_cli - data_Q_all$Q_direct_cli)/(abs(data_Q_all$Q_direct_cli) + abs(data_Q_all$Q_cli - data_Q_all$Q_direct_cli))
+
+#write.csv(data_Q_all, "pints_for_map.csv",row.names=T)
+library(ggpubr)
+para_m = data_Q_all %>% dplyr::select(type,C_m_directe,C_m_indirecte) %>% reshape2::melt()
+
+means <- aggregate(value ~  type+variable, para_m, median)
+
+ggplot(data =para_m,aes(x = type ,y=value,fill = variable,label = value))+
+  geom_boxplot(size = 0.3,position=position_dodge(),outlier.shape = NA)+ theme_classic()+ ylim(0,1)+
+  stat_summary(fun=mean, colour="darkred", geom="point", 
+               shape=18, size=3, show.legend=FALSE) + 
+  geom_text(data = means, aes(label = value, y = value + 0.08))+
+  labs(x=" ", y = "Ratio")+scale_fill_manual(values=c("#D45C41", "#3689AE"))+
+  theme(axis.text = element_text(face="plain",color="black", size=20),axis.text.x=element_text(angle=60),
+        axis.title=element_text(size=20,face="bold",color="black") ,
+        legend.position="right",strip.text = element_text(size=18))
+
+para_cli = data_Q_all %>% dplyr::select(type,C_cli_directe,C_cli_indirecte) %>% reshape2::melt()
+
+means <- aggregate(value ~  type+variable, para_cli, median)
+
+
+ggplot(data =para_cli,aes(x = type ,y=value,fill = variable))+
+  geom_boxplot(size = 0.3,position=position_dodge(),outlier.shape = NA)+ theme_classic()+ ylim(0,1)+
+  labs(x=" ", y = "Ratio")+scale_fill_manual(values=c("#D45C41", "#3689AE"))+
+  theme(axis.text = element_text(face="plain",color="black", size=20),axis.text.x=element_text(angle=60),
+        axis.title=element_text(size=20,face="bold",color="black") ,
+        legend.position="right",strip.text = element_text(size=18))
+
+
+
+
