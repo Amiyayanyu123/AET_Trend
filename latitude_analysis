@@ -1,0 +1,643 @@
+library(raster)
+library(xts)
+library(lubridate)
+library(ggstatsplot)
+library(rsq)
+library(extrafont)
+library(car)
+library(bfast)
+library(remotes)
+library(ggpmisc)
+library(dplyr)
+library(lubridate)
+library(mice)
+library(VIM)
+library(ggpubr)
+
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\12")
+multiband_tif_1 <- stack("trend_ET_LAI_corr.tif")
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\14")
+multiband_tif_2 <- stack("trend_ET_LAI_corr.tif")
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\16")
+multiband_tif_3 <- stack("trend_ET_LAI_corr.tif")
+
+############## 
+multi_frame <-
+  as.data.frame(multiband_tif_1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+multi_frame$multiband_tif_2 = extract(multiband_tif_2 ,multi_frame[,1:2])
+multi_frame$multiband_tif_3 = extract(multiband_tif_3 ,multi_frame[,1:2])
+
+
+multi_long = multi_frame %>% mutate(across(c(x, y), round, digits = 0)) %>% reshape2::melt(id=c("x", "y"))
+
+statis_plot = multi_long %>% 
+  group_by(y,variable) %>%
+  summarise(median = median(value, na.rm = TRUE)*10,
+            Q75 = quantile(value,probs=0.75, na.rm = TRUE)*10,
+            Q25 = quantile(value,probs=0.25, na.rm = TRUE)*10 ) %>% dplyr::filter( y >-40 & y < 60)
+
+
+A1 = ggplot(statis_plot, aes(x=y, y=median,color = variable,fill = variable))+ 
+  geom_ribbon(aes(ymin=Q25, ymax=Q75),alpha=0.3)+
+  coord_flip()+geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  labs(x="Latitude",y = "") +scale_y_continuous(breaks = seq(-0.8,0.8,0.2))+scale_x_continuous(breaks = seq(-80,80,20))+
+  theme(axis.title=element_text(size=28,face="bold",color="black"),
+        axis.text = element_text(size=28,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=28),
+        legend.position="none",
+        legend.text = element_text(size=28
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+
+#########################################################################################compare the sensitivity and the trend due to KNDVI change from 1982~2000
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\12")
+multiband_tif_1 <- stack("trend_ET_VPD_corr.tif")
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\14")
+multiband_tif_2 <- stack("trend_ET_VPD_corr.tif")
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\16")
+multiband_tif_3 <- stack("trend_ET_VPD_corr.tif")
+
+############## 
+multi_frame <-
+  as.data.frame(multiband_tif_1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+multi_frame$multiband_tif_2 = extract(multiband_tif_2 ,multi_frame[,1:2])
+multi_frame$multiband_tif_3 = extract(multiband_tif_3 ,multi_frame[,1:2])
+
+
+multi_long = multi_frame %>% mutate(across(c(x, y), round, digits = 0)) %>% reshape2::melt(id=c("x", "y"))
+
+statis_plot = multi_long %>% 
+  group_by(y,variable) %>%
+  summarise(median = median(value, na.rm = TRUE)*10,
+            Q75 = quantile(value,probs=0.75, na.rm = TRUE)*10,
+            Q25 = quantile(value,probs=0.25, na.rm = TRUE)*10 ) %>% dplyr::filter( y >-40 & y < 60)
+
+
+B1 = ggplot(statis_plot, aes(x=y, y=median,color = variable,fill = variable))+ 
+  geom_ribbon(aes(ymin=Q25, ymax=Q75),alpha=0.3)+
+  coord_flip()+geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  labs(x="Latitude",y = "") +scale_y_continuous(breaks = seq(-0.8,0.8,0.2))+scale_x_continuous(breaks = seq(-80,80,20))+
+  theme(axis.title=element_text(size=28,face="bold",color="black"),
+        axis.text = element_text(size=28,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=28),
+        legend.position="none",
+        legend.text = element_text(size=28
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+#######################################################
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\12")
+multiband_tif_1 <- stack("trend_ET_Temp_corr.tif")
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\14")
+multiband_tif_2 <- stack("trend_ET_Temp_corr.tif")
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\16")
+multiband_tif_3 <- stack("trend_ET_Temp_corr.tif")
+
+############## 
+multi_frame <-
+  as.data.frame(multiband_tif_1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+multi_frame$multiband_tif_2 = extract(multiband_tif_2 ,multi_frame[,1:2])
+multi_frame$multiband_tif_3 = extract(multiband_tif_3 ,multi_frame[,1:2])
+
+
+multi_long = multi_frame %>% mutate(across(c(x, y), round, digits = 0)) %>% reshape2::melt(id=c("x", "y"))
+
+statis_plot = multi_long %>% 
+  group_by(y,variable) %>%
+  summarise(median = median(value, na.rm = TRUE)*10,
+            Q75 = quantile(value,probs=0.75, na.rm = TRUE)*10,
+            Q25 = quantile(value,probs=0.25, na.rm = TRUE)*10 ) %>% dplyr::filter( y >-40 & y < 60)
+
+
+C1 = ggplot(statis_plot, aes(x=y, y=median,color = variable,fill = variable))+ 
+  geom_ribbon(aes(ymin=Q25, ymax=Q75),alpha=0.3)+
+  coord_flip()+geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  labs(x="Latitude",y = "") +scale_y_continuous(breaks = seq(-0.8,0.8,0.2))+scale_x_continuous(breaks = seq(-80,80,20))+
+  theme(axis.title=element_text(size=28,face="bold",color="black"),
+        axis.text = element_text(size=28,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=28),
+        legend.position="none",
+        legend.text = element_text(size=28
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+
+
+
+
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\12")
+multiband_tif_1 <- stack("trend_ET_Rn_corr.tif")
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\14")
+multiband_tif_2 <- stack("trend_ET_Rn_corr.tif")
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\16")
+multiband_tif_3 <- stack("trend_ET_Rn_corr.tif")
+
+############## 
+multi_frame <-
+  as.data.frame(multiband_tif_1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+multi_frame$multiband_tif_2 = extract(multiband_tif_2 ,multi_frame[,1:2])
+multi_frame$multiband_tif_3 = extract(multiband_tif_3 ,multi_frame[,1:2])
+
+
+multi_long = multi_frame %>% mutate(across(c(x, y), round, digits = 0)) %>% reshape2::melt(id=c("x", "y"))
+
+statis_plot = multi_long %>% 
+  group_by(y,variable) %>%
+  summarise(median = median(value, na.rm = TRUE)*10,
+            Q75 = quantile(value,probs=0.75, na.rm = TRUE)*10,
+            Q25 = quantile(value,probs=0.25, na.rm = TRUE)*10 ) %>% dplyr::filter( y >-40 & y < 60)
+
+
+D1 = ggplot(statis_plot, aes(x=y, y=median,color = variable,fill = variable))+ 
+  geom_ribbon(aes(ymin=Q25, ymax=Q75),alpha=0.3)+
+  coord_flip()+geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  labs(x="Latitude",y = "") +scale_y_continuous(breaks = seq(-0.8,0.8,0.2))+scale_x_continuous(breaks = seq(-80,80,20))+
+  theme(axis.title=element_text(size=28,face="bold",color="black"),
+        axis.text = element_text(size=28,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=28),
+        legend.position="right",
+        legend.text = element_text(size=28
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+
+
+
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\12")
+multiband_tif_1 <- stack("trend_ET_Pre_corr.tif")
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\14")
+multiband_tif_2 <- stack("trend_ET_Pre_corr.tif")
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\16")
+multiband_tif_3 <- stack("trend_ET_Pre_corr.tif")
+
+############## 
+multi_frame <-
+  as.data.frame(multiband_tif_1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+multi_frame$multiband_tif_2 = extract(multiband_tif_2 ,multi_frame[,1:2])
+multi_frame$multiband_tif_3 = extract(multiband_tif_3 ,multi_frame[,1:2])
+
+
+multi_long = multi_frame %>% mutate(across(c(x, y), round, digits = 0)) %>% reshape2::melt(id=c("x", "y"))
+
+statis_plot = multi_long %>% 
+  group_by(y,variable) %>%
+  summarise(median = median(value, na.rm = TRUE)*10,
+            Q75 = quantile(value,probs=0.75, na.rm = TRUE)*10,
+            Q25 = quantile(value,probs=0.25, na.rm = TRUE)*10 ) %>% dplyr::filter( y >-40 & y < 60)
+
+
+E1 = ggplot(statis_plot, aes(x=y, y=median,color = variable,fill = variable))+ 
+  geom_ribbon(aes(ymin=Q25, ymax=Q75),alpha=0.3)+
+  coord_flip()+geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  labs(x="Latitude",y = "") +scale_y_continuous(breaks = seq(-0.8,0.8,0.2))+scale_x_continuous(breaks = seq(-80,80,20))+
+  theme(axis.title=element_text(size=28,face="bold",color="black"),
+        axis.text = element_text(size=28,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=28),
+        legend.position="none",
+        legend.text = element_text(size=28
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+
+
+
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\12")
+multiband_tif_1 <- stack("trend_ET_wind_corr.tif")
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\14")
+multiband_tif_2 <- stack("trend_ET_wind_corr.tif")
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend\\16")
+multiband_tif_3 <- stack("trend_ET_wind_corr.tif")
+
+############## 
+multi_frame <-
+  as.data.frame(multiband_tif_1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+multi_frame$multiband_tif_2 = extract(multiband_tif_2 ,multi_frame[,1:2])
+multi_frame$multiband_tif_3 = extract(multiband_tif_3 ,multi_frame[,1:2])
+
+
+multi_long = multi_frame %>% mutate(across(c(x, y), round, digits = 0)) %>% reshape2::melt(id=c("x", "y"))
+
+statis_plot = multi_long %>% 
+  group_by(y,variable) %>%
+  summarise(median = median(value, na.rm = TRUE)*10,
+            Q75 = quantile(value,probs=0.75, na.rm = TRUE)*10,
+            Q25 = quantile(value,probs=0.25, na.rm = TRUE)*10 ) %>% dplyr::filter( y >-40 & y < 60)
+
+
+F1 = ggplot(statis_plot, aes(x=y, y=median,color = variable,fill = variable))+ 
+  geom_ribbon(aes(ymin=Q25, ymax=Q75),alpha=0.3)+
+  coord_flip()+geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  labs(x="Latitude",y = "") +scale_y_continuous(breaks = seq(-0.8,0.8,0.2))+scale_x_continuous(breaks = seq(-80,80,20))+
+  theme(axis.title=element_text(size=28,face="bold",color="black"),
+        axis.text = element_text(size=28,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=28),
+        legend.position="none",
+        legend.text = element_text(size=28
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+
+ggarrange(A1,B1,C1,D1,E1,F1,
+          ncol = 3, nrow = 2)
+
+#################################################################################################################
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend_linear\\LAI")
+
+filenames <- list.files(pattern="*.tif", full.names=TRUE)
+
+ldf <- lapply(filenames, stack)
+
+stk1 <- terra::rast(filenames)
+
+multi_frame <-
+  as.data.frame(stk1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend_linear\\1982_2019_correlation")
+multiband_tif_1 <- stack("corr_LAI_ET.tif")
+
+multi_frame$origin = extract(multiband_tif_1 ,multi_frame[,1:2])
+
+##################################
+multi_long = multi_frame %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))%>% transform(UID = "1")
+statis_plot$ID = substr(statis_plot$variable,7,9) %>% as.numeric() + 1989
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(LAI_ET0 > 0) %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot_1 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))%>% transform(UID = "2")
+statis_plot_1$ID = substr(statis_plot_1$variable,7,9) %>% as.numeric() + 1989
+
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(LAI_ET0 < 0) %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot_2 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))  %>% transform(UID = "3")
+statis_plot_2$ID = substr(statis_plot_2$variable,7,9) %>% as.numeric() + 1989
+####################
+library(devtools)
+all1 = rbind(statis_plot,statis_plot_1)
+all2 = rbind(all1,statis_plot_2)
+
+B2 = ggplot(all2, aes(x=ID, y= median,color = UID,fill = UID))+ geom_ribbon(aes(ymin=Q25, ymax=Q75),alpha=0.2,colour = NA)+
+  geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  stat_poly_eq(formula = y ~ x,aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+               parse=TRUE,label.x.npc = "right",size = 6)+
+  labs(x="Year", y = "corr(ET,LAI)") +
+  theme(axis.title=element_text(size=20,face="bold",color="black"),
+        axis.text = element_text(size=18,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=18),
+        legend.position="none",
+        legend.text = element_text(size=18
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+
+
+#################################################################################################################
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend_linear\\VPD")
+
+filenames <- list.files(pattern="*.tif", full.names=TRUE)
+
+ldf <- lapply(filenames, stack)
+
+stk1 <- terra::rast(filenames)
+
+multi_frame <-
+  as.data.frame(stk1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend_linear\\1982_2019_correlation")
+multiband_tif_1 <- stack("corr_VPD_ET.tif")
+
+multi_frame$origin = extract(multiband_tif_1 ,multi_frame[,1:2])
+
+##################################
+multi_long = multi_frame %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))%>% transform(UID = "1")
+statis_plot$ID = substr(statis_plot$variable,7,9) %>% as.numeric() + 1989
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(VPD_ET0 > 0) %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot_1 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))%>% transform(UID = "2")
+statis_plot_1$ID = substr(statis_plot_1$variable,7,9) %>% as.numeric() + 1989
+
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(VPD_ET0 < 0) %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot_2 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))  %>% transform(UID = "3")
+statis_plot_2$ID = substr(statis_plot_2$variable,7,9) %>% as.numeric() + 1989
+####################
+library(devtools)
+all1 = rbind(statis_plot,statis_plot_1)
+all2 = rbind(all1,statis_plot_2)
+
+B2 = ggplot(all2, aes(x=ID, y= median,color = UID,fill = UID))+ geom_ribbon(aes(ymin=Q25, ymax=Q75),alpha=0.2,colour = NA)+
+  geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+ stat_poly_eq(formula = y ~ x,aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+                                                              parse=TRUE,label.x.npc = "right",size = 6)+
+  labs(x="Year", y = "corr(ET,VPD)") +
+  theme(axis.title=element_text(size=20,face="bold",color="black"),
+        axis.text = element_text(size=18,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=18),
+        legend.position="none",
+        legend.text = element_text(size=18
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+
+#################################################################################################################
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend_linear\\Temp")
+
+filenames <- list.files(pattern="*.tif", full.names=TRUE)
+
+ldf <- lapply(filenames, stack)
+
+stk1 <- terra::rast(filenames)
+
+multi_frame <-
+  as.data.frame(stk1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend_linear\\1982_2019_correlation")
+multiband_tif_1 <- stack("corr_Temp_ET.tif")
+
+multi_frame$origin = extract(multiband_tif_1 ,multi_frame[,1:2])
+
+##################################
+multi_long = multi_frame %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))%>% transform(UID = "1")
+statis_plot$ID = substr(statis_plot$variable,8,11) %>% as.numeric() + 1989
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(Temp_ET0 > 0) %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot_1 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))%>% transform(UID = "2")
+statis_plot_1$ID = substr(statis_plot_1$variable,8,11) %>% as.numeric() + 1989
+
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(Temp_ET0 < 0) %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot_2 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))  %>% transform(UID = "3")
+statis_plot_2$ID = substr(statis_plot_2$variable,8,11) %>% as.numeric() + 1989
+####################
+library(devtools)
+all1 = rbind(statis_plot,statis_plot_1)
+all2 = rbind(all1,statis_plot_2)
+
+C2 = ggplot(all2, aes(x=ID, y= median,color = UID,fill = UID))+ geom_ribbon(aes(ymin=Q25, ymax=Q75),alpha=0.2,colour = NA)+
+  geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  stat_poly_eq(formula = y ~ x,aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+                                                              parse=TRUE,label.x.npc = "right",size = 6)+
+  labs(x="Year", y = "corr(ET,Temp)") +
+  theme(axis.title=element_text(size=20,face="bold",color="black"),
+        axis.text = element_text(size=18,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=18),
+        legend.position="none",
+        legend.text = element_text(size=18
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+
+
+#################################################################################################################
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend_linear\\Rn")
+
+filenames <- list.files(pattern="*.tif", full.names=TRUE)
+
+ldf <- lapply(filenames, stack)
+
+stk1 <- terra::rast(filenames)
+
+multi_frame <-
+  as.data.frame(stk1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend_linear\\1982_2019_correlation")
+multiband_tif_1 <- stack("corr_Rn_ET.tif")
+
+multi_frame$origin = extract(multiband_tif_1 ,multi_frame[,1:2])
+
+##################################
+multi_long = multi_frame %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))%>% transform(UID = "1")
+statis_plot$ID = substr(statis_plot$variable,6,11) %>% as.numeric() + 1989
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(Rn_ET0 > 0) %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot_1 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))%>% transform(UID = "2")
+statis_plot_1$ID = substr(statis_plot_1$variable,6,11) %>% as.numeric() + 1989
+
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(Rn_ET0 < 0) %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot_2 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))  %>% transform(UID = "3")
+statis_plot_2$ID = substr(statis_plot_2$variable,6,11) %>% as.numeric() + 1989
+####################
+library(devtools)
+all1 = rbind(statis_plot,statis_plot_1)
+all2 = rbind(all1,statis_plot_2)
+
+D2 = ggplot(all2, aes(x=ID, y= median,color = UID,fill = UID))+ geom_ribbon(aes(ymin=Q25, ymax=Q75),alpha=0.2,colour = NA)+
+  geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  stat_poly_eq(formula = y ~ x,aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+                                                              parse=TRUE,label.x.npc = "right",size = 6)+
+  labs(x="Year", y = "corr(ET,Rn)") +
+  theme(axis.title=element_text(size=20,face="bold",color="black"),
+        axis.text = element_text(size=18,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=18),
+        legend.position="none",
+        legend.text = element_text(size=18
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+
+#################################################################################################################
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend_linear\\Pre")
+
+filenames <- list.files(pattern="*.tif", full.names=TRUE)
+
+ldf <- lapply(filenames, stack)
+
+stk1 <- terra::rast(filenames)
+
+multi_frame <-
+  as.data.frame(stk1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend_linear\\1982_2019_correlation")
+multiband_tif_1 <- stack("corr_Pre_ET.tif")
+
+multi_frame$origin = extract(multiband_tif_1 ,multi_frame[,1:2])
+
+##################################
+multi_long = multi_frame %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))%>% transform(UID = "1")
+statis_plot$ID = substr(statis_plot$variable,7,11) %>% as.numeric() + 1989
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(Pre_ET0 > 0) %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot_1 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))%>% transform(UID = "2")
+statis_plot_1$ID = substr(statis_plot_1$variable,7,11) %>% as.numeric() + 1989
+
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(Pre_ET0 < 0) %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot_2 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))  %>% transform(UID = "3")
+statis_plot_2$ID = substr(statis_plot_2$variable,7,11) %>% as.numeric() + 1989
+####################
+library(devtools)
+all1 = rbind(statis_plot,statis_plot_1)
+all2 = rbind(all1,statis_plot_2)
+
+E2 = ggplot(all2, aes(x=ID, y= median,color = UID,fill = UID))+ geom_ribbon(aes(ymin=Q25, ymax=Q75),alpha=0.2,colour = NA)+
+  geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+ stat_poly_eq(formula = y ~ x,aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+                                                              parse=TRUE,label.x.npc = "right",size = 6)+
+  labs(x="Year", y = "corr(ET,Pre)") +
+  theme(axis.title=element_text(size=20,face="bold",color="black"),
+        axis.text = element_text(size=18,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=18),
+        legend.position="none",
+        legend.text = element_text(size=18
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+############################################################################################################################
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend_linear\\wind")
+
+filenames <- list.files(pattern="*.tif", full.names=TRUE)
+
+ldf <- lapply(filenames, stack)
+
+stk1 <- terra::rast(filenames)
+
+multi_frame <-
+  as.data.frame(stk1, xy = TRUE) %>%
+  na.omit() %>% mutate(across(c(x, y), round, digits = 3))
+
+setwd("F:\\Global_AET_regression_trend\\Datasets\\correlation_trend_linear\\1982_2019_correlation")
+multiband_tif_1 <- stack("corr_wind_ET.tif")
+
+multi_frame$origin = extract(multiband_tif_1 ,multi_frame[,1:2])
+
+##################################
+multi_long = multi_frame %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))%>% transform(UID = "1")
+statis_plot$ID = substr(statis_plot$variable,8,11) %>% as.numeric() + 1989
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(wind_ET0 > 0) %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot_1 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))%>% transform(UID = "2")
+statis_plot_1$ID = substr(statis_plot_1$variable,8,11) %>% as.numeric() + 1989
+
+################################# origin >0
+multi_long = multi_frame %>% dplyr::filter(wind_ET0 < 0) %>% dplyr::select(-x,-y,-origin) %>% reshape2::melt()
+statis_plot_2 = multi_long %>% 
+  group_by(variable) %>%
+  summarise(median = median(value, na.rm = TRUE),
+            Q25 = quantile(value,probs = 0.25, na.rm = TRUE),
+            Q75 = quantile(value,probs = 0.75, na.rm = TRUE))  %>% transform(UID = "3")
+statis_plot_2$ID = substr(statis_plot_2$variable,8,11) %>% as.numeric() + 1989
+####################
+library(devtools)
+all1 = rbind(statis_plot,statis_plot_1)
+all2 = rbind(all1,statis_plot_2)
+
+F2 = ggplot(all2, aes(x=ID, y= median,color = UID,fill = UID))+  geom_ribbon(aes(ymin=Q25, ymax=Q75),alpha=0.2,colour = NA)+
+  geom_line(size = 0.8)+geom_hline(yintercept=0, linetype="dashed", color = "black")+
+ stat_poly_eq(formula = y ~ x,aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+  parse=TRUE,label.x.npc = "right",size = 6)+
+  labs(x="Year", y = "corr(ET,wind)") +
+  theme(axis.title=element_text(size=20,face="bold",color="black"),
+        axis.text = element_text(size=18,face="plain",color="black"),
+        panel.background=element_rect(colour="black",fill=NA),
+        panel.grid.minor=element_blank(),
+        text=element_text(size=18),
+        legend.position="right",
+        legend.text = element_text(size=18
+        ),legend.background=element_rect(colour=NA,fill=NA),
+        axis.ticks=element_line(colour="black"))
+
+ggarrange(A2,B2,C2,D2,E2,F2,
+          labels = c("(a)", "(b)", "(c)","(d)","(e)","(f)"),
+          ncol = 2, nrow = 3)
